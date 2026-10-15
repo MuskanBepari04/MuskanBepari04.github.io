@@ -1,3 +1,67 @@
+# name: Deploy to GitHub Pages
+
+# on:
+#   push:
+#     branches: [main]
+#   workflow_dispatch:
+
+# # Least-privilege token: read the repo, write to Pages, and mint an OIDC token for deployment.
+# permissions:
+#   contents: read
+#   pages: write
+#   id-token: write
+
+# # Allow one deployment at a time; don't cancel a production deploy that's in progress.
+# concurrency:
+#   group: pages
+#   cancel-in-progress: false
+
+# jobs:
+#   build:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout
+#         uses: actions/checkout@v7
+
+#       - name: Set up Node.js
+#         uses: actions/setup-node@v7
+#         with:
+#           node-version-file: .nvmrc
+#           cache: npm
+
+#       - name: Install dependencies
+#         run: npm ci
+
+#       - name: Check resume file
+#         run: |
+#           if [ ! -f public/resume.pdf ]; then
+#             echo "::warning file=public/resume.pdf::public/resume.pdf is missing — the resume download links will 404 until you add it."
+#           fi
+
+#       - name: Build
+#         run: npm run build
+
+#       - name: Configure Pages
+#         uses: actions/configure-pages@v6
+
+#       - name: Upload artifact
+#         uses: actions/upload-pages-artifact@v5
+#         with:
+#           path: dist
+
+#   deploy:
+#     needs: build
+#     runs-on: ubuntu-latest
+#     environment:
+#       name: github-pages
+#       url: ${{ steps.deployment.outputs.page_url }}
+#     steps:
+#       - name: Deploy to GitHub Pages
+#         id: deployment
+#         uses: actions/deploy-pages@v5
+
+
+
 name: Deploy to GitHub Pages
 
 on:
@@ -5,13 +69,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Least-privilege token: read the repo, write to Pages, and mint an OIDC token for deployment.
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Allow one deployment at a time; don't cancel a production deploy that's in progress.
 concurrency:
   group: pages
   cancel-in-progress: false
@@ -19,6 +81,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -35,11 +98,28 @@ jobs:
       - name: Check resume file
         run: |
           if [ ! -f public/resume.pdf ]; then
-            echo "::warning file=public/resume.pdf::public/resume.pdf is missing — the resume download links will 404 until you add it."
+            echo "::warning file=public/resume.pdf::public/resume.pdf is missing."
           fi
 
       - name: Build
         run: npm run build
+
+      - name: Verify production build
+        run: |
+          echo "Checking dist/index.html..."
+          cat dist/index.html
+
+          if grep -q '/src/main.tsx' dist/index.html; then
+            echo "ERROR: Development entry point found in production build!"
+            exit 1
+          fi
+
+          if ! grep -q '/assets/' dist/index.html; then
+            echo "ERROR: Built HTML does not reference assets!"
+            exit 1
+          fi
+
+          echo "Production build verified successfully."
 
       - name: Configure Pages
         uses: actions/configure-pages@v6
@@ -52,9 +132,11 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
